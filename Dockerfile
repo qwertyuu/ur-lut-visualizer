@@ -26,4 +26,4 @@ COPY . /app
 EXPOSE 8050
 
 # Run server
-CMD ["python", "dashapp.py"]
+CMD ["poetry", "run", "python", "dashapp.py"]
