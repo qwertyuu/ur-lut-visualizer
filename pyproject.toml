@@ -1,0 +1,27 @@
+[tool.poetry]
+package-mode = false
+name = "ur-lut-visualizer"
+version = "0.1.0"
+description = ""
+authors = ["Raphaël Côté <cotlarrc@msn.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+plotly = "^5.19.0"
+pandas = "^2.2.1"
+matplotlib = "^3.8.3"
+huggingface-hub = "^0.20.3"
+embarrassing = "^0.0.11"
+dash = "^2.15.0"
+jupyter = "^1.0.0"
+ipywidgets = "^8.1.2"
+royalur = {path = "temp/royalur-0.0.7-py3-none-any.whl"}
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
