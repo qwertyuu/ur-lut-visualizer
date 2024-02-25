@@ -34,4 +34,4 @@ def update_output(n_clicks, input_value):
 
 # Exécuter l'application
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0")
