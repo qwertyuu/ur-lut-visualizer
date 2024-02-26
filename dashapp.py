@@ -199,7 +199,7 @@ def on_button_click(n_clicks, reset_n_clicks, session_id):
     button_id = json.loads(button_id)["index"]
     if button_id == "back":
         move_history.pop()
-        game = set_game(game_history.pop())
+        game = set_game(session_id, game_history.pop())
         return (
             is_back_disabled(game_history),
             get_lut_board_state(game, move_history),
