@@ -10,11 +10,14 @@ import base64
 from royalur import Game
 from royalur.lut.board_encoder import SimpleGameStateEncoding
 from royalur.model.player import PlayerType
+import os
 
 
 REPO_ID = "sothatsit/RoyalUr"
 FILENAME = "finkel.rgu"
-filename = hf_hub_download(repo_id=REPO_ID, filename=FILENAME)
+filename = hf_hub_download(
+    repo_id=REPO_ID, filename=FILENAME, cache_dir=os.getenv("HF_CACHE_DIR", None)
+)
 lut_player = LutAgent(filename)
 lut = lut_player.lut
 game = Game.create_finkel(pawns=7)
@@ -314,4 +317,4 @@ app.title = "RGU - LUT explorer"
 
 # Exécuter l'application
 if __name__ == "__main__":
-    app.run(host="0.0.0.0")
+    app.run(host="0.0.0.0", debug=bool(os.getenv("DEBUG", False)))
