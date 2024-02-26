@@ -310,7 +310,7 @@ app.layout = html.Div(
         ),
     ]
 )
-
+app.title = "RGU - LUT explorer"
 
 # Exécuter l'application
 if __name__ == "__main__":
