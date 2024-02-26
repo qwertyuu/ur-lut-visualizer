@@ -37,6 +37,7 @@ def init_session(session_id):
         "game": game,
         "game_history": [],
         "move_history": [],
+        "init_date": pd.Timestamp.now(),
     }
 
 
@@ -179,7 +180,6 @@ def on_button_click(n_clicks, reset_n_clicks, session_id):
     move_history = get_session_move_history(session_id)
     game_history = get_session_game_history(session_id)
     ctx = dash.callback_context
-    print("on_button_click", ctx.triggered)
     if ctx.triggered[0]["prop_id"] == "reset.n_clicks":
         init_session(session_id)
         game = get_session_game(session_id)
@@ -196,6 +196,7 @@ def on_button_click(n_clicks, reset_n_clicks, session_id):
     if button_id == "back":
         move_history.pop()
         game = game_history.pop()
+        data_by_session[session_id]["game"] = game
         return (
             is_back_disabled(game_history),
             get_lut_board_state(game, move_history),
