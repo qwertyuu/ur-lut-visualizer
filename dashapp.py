@@ -1,4 +1,5 @@
 import json
+import random
 import dash
 from dash.dependencies import Input, Output
 from dash import html, ALL
@@ -11,6 +12,7 @@ from royalur import Game
 from royalur.lut.board_encoder import SimpleGameStateEncoding
 from royalur.model.player import PlayerType
 import os
+import dash_core_components as dcc
 
 
 REPO_ID = "sothatsit/RoyalUr"
@@ -20,10 +22,36 @@ filename = hf_hub_download(
 )
 lut_player = LutAgent(filename)
 lut = lut_player.lut
-game = Game.create_finkel(pawns=7)
-game_history = []
-move_history = []
-string = b""
+data_by_session = {}
+
+
+def get_session_game(session_id):
+    if session_id not in data_by_session:
+        init_session(session_id)
+    return data_by_session[session_id]["game"]
+
+
+def init_session(session_id):
+    game = Game.create_finkel(pawns=7)
+    data_by_session[session_id] = {
+        "game": game,
+        "game_history": [],
+        "move_history": [],
+    }
+
+
+def get_session_game_history(session_id):
+    if session_id not in data_by_session:
+        init_session(session_id)
+    return data_by_session[session_id]["game_history"]
+
+
+def get_session_move_history(session_id):
+    if session_id not in data_by_session:
+        init_session(session_id)
+    return data_by_session[session_id]["move_history"]
+
+
 if False:
 
     lut_df = pd.DataFrame(
@@ -56,7 +84,7 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 encoding = SimpleGameStateEncoding()
 
 
-def get_lut_board_state(game: Game, compare_to_prob=None, history=False):
+def get_lut_board_state(game: Game, move_history, compare_to_prob=None, history=False):
     string = game.get_board().to_string()
     light_player = game.get_light_player()
     dark_player = game.get_dark_player()
@@ -69,7 +97,9 @@ def get_lut_board_state(game: Game, compare_to_prob=None, history=False):
         player_after_text = " after move"
     elif not history:
         if move_history:
-            string += "\nLast Move: " + generate_move_text(len(move_history) - 1)
+            string += "\nLast Move: " + generate_move_text(
+                len(move_history) - 1, move_history
+            )
 
     light_string_proba = f"Light {probability:.2f}% "
     if compare_to_prob is not None:
@@ -115,18 +145,18 @@ def lut_get(current_state):
     return value
 
 
-def is_back_disabled():
+def is_back_disabled(game_history):
     return len(game_history) == 0
 
 
-def generate_move_text(i):
+def generate_move_text(i, move_history):
     return f"#{i + 1} {move_history[i]}\n"
 
 
-def generate_board_history():
+def generate_board_history(move_history, game_history):
     events = [
-        (generate_move_text(i) if i != len(move_history) - 1 else "")
-        + get_lut_board_state(game, history=True)
+        (generate_move_text(i, move_history) if i != len(move_history) - 1 else "")
+        + get_lut_board_state(game, move_history, history=True)
         for i, game in enumerate(game_history)
     ]
     events.reverse()
@@ -141,21 +171,25 @@ def generate_board_history():
     Output("board-history", "children"),
     Input({"type": "move", "index": ALL}, "n_clicks"),
     Input("reset", "n_clicks"),
+    Input("session_id", "data"),
     prevent_initial_call=True,
 )
-def on_button_click(n_clicks, reset_n_clicks):
-    global game
+def on_button_click(n_clicks, reset_n_clicks, session_id):
+    game = get_session_game(session_id)
+    move_history = get_session_move_history(session_id)
+    game_history = get_session_game_history(session_id)
     ctx = dash.callback_context
     print("on_button_click", ctx.triggered)
     if ctx.triggered[0]["prop_id"] == "reset.n_clicks":
-        game = Game.create_finkel(pawns=7)
-        move_history.clear()
-        game_history.clear()
+        init_session(session_id)
+        game = get_session_game(session_id)
+        move_history = get_session_move_history(session_id)
+        game_history = get_session_game_history(session_id)
         return (
-            is_back_disabled(),
-            get_lut_board_state(game),
-            generate_available_moves(game),
-            generate_board_history(),
+            is_back_disabled(game_history),
+            get_lut_board_state(game, move_history),
+            generate_available_moves(game, move_history),
+            generate_board_history(move_history, game_history),
         )
     button_id = ctx.triggered[0]["prop_id"].split(".")[0]
     button_id = json.loads(button_id)["index"]
@@ -163,10 +197,10 @@ def on_button_click(n_clicks, reset_n_clicks):
         move_history.pop()
         game = game_history.pop()
         return (
-            is_back_disabled(),
-            get_lut_board_state(game),
-            generate_available_moves(game),
-            generate_board_history(),
+            is_back_disabled(game_history),
+            get_lut_board_state(game, move_history),
+            generate_available_moves(game, move_history),
+            generate_board_history(move_history, game_history),
         )
     game_history.append(game.copy())
     if "-" not in button_id:
@@ -174,10 +208,10 @@ def on_button_click(n_clicks, reset_n_clicks):
         dice = int(button_id)
         game.roll_dice(dice)
         return (
-            is_back_disabled(),
-            get_lut_board_state(game),
-            generate_available_moves(game),
-            generate_board_history(),
+            is_back_disabled(game_history),
+            get_lut_board_state(game, move_history),
+            generate_available_moves(game, move_history),
+            generate_board_history(move_history, game_history),
         )
     dice, move_index = button_id.split("-")
     dice = int(dice)
@@ -188,17 +222,17 @@ def on_button_click(n_clicks, reset_n_clicks):
     move_history.append(move.describe())
     game.make_move(move)
     return (
-        is_back_disabled(),
-        get_lut_board_state(game),
-        generate_available_moves(game),
-        generate_board_history(),
+        is_back_disabled(game_history),
+        get_lut_board_state(game, move_history),
+        generate_available_moves(game, move_history),
+        generate_board_history(move_history, game_history),
     )
 
 
 code_style = {"whiteSpace": "pre-wrap", "font-family": "monospace"}
 
 
-def generate_available_moves(game):
+def generate_available_moves(game, move_history):
     new_components = []
     game_proba = lut_get(game.get_current_state()) / 65535 * 100
     for dice in range(5):
@@ -223,6 +257,7 @@ def generate_available_moves(game):
                         html.P(
                             get_lut_board_state(
                                 game_copy,
+                                move_history,
                                 game_proba,
                             ),
                             # monospace font for preformatted text
@@ -246,7 +281,9 @@ def generate_available_moves(game):
                             n_clicks=0,
                         ),
                         html.P(
-                            get_lut_board_state(game_move_copy, game_proba),
+                            get_lut_board_state(
+                                game_move_copy, move_history, game_proba
+                            ),
                             style=code_style,
                         ),
                     ],
@@ -256,63 +293,71 @@ def generate_available_moves(game):
     return new_components
 
 
-app.layout = html.Div(
-    [
-        # html.Img(src="data:image/png;base64," + string.decode("utf-8")),
-        html.H1("Royal Game of Ur - LUT exploration"),
-        html.Div(
-            [
-                html.Div(
-                    [
-                        html.H2("Current board"),
-                        html.Button(
-                            "Reset",
-                            id="reset",
-                            n_clicks=0,
-                        ),
-                        html.P(
-                            id="board",
-                            children=get_lut_board_state(game),
-                            style=code_style,
-                        ),
-                        html.Button(
-                            "Go back to previous state",
-                            id={"type": "move", "index": "back"},
-                            n_clicks=0,
-                            disabled=True,
-                        ),
-                        html.H2("Board history"),
-                        html.Pre(
-                            id="board-history",
-                            children="",
-                            style=code_style,
-                        ),
-                    ],
-                    style={
-                        "display": "inline-block",
-                        "vertical-align": "top",
-                        "width": "20%",
-                    },
-                ),
-                html.Div(
-                    [
-                        html.H2("Available moves"),
-                        html.Div(
-                            id="available-moves",
-                            children=generate_available_moves(game),
-                        ),
-                    ],
-                    style={
-                        "display": "inline-block",
-                        "vertical-align": "top",
-                        "width": "80%",
-                        "overflow-x": "scroll",
-                    },
-                ),
-            ]
-        ),
-    ]
-)
+def serve_layout():
+    session_id = str(random.randint(0, 1000000))
+    game = get_session_game(session_id)
+    move_history = get_session_move_history(session_id)
+    return html.Div(
+        [
+            # html.Img(src="data:image/png;base64," + string.decode("utf-8")),
+            html.H1("Royal Game of Ur - LUT exploration"),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.H2("Current board"),
+                            html.Button(
+                                "Reset",
+                                id="reset",
+                                n_clicks=0,
+                            ),
+                            html.P(
+                                id="board",
+                                children=get_lut_board_state(game, move_history),
+                                style=code_style,
+                            ),
+                            html.Button(
+                                "Go back to previous state",
+                                id={"type": "move", "index": "back"},
+                                n_clicks=0,
+                                disabled=True,
+                            ),
+                            html.H2("Board history"),
+                            html.Pre(
+                                id="board-history",
+                                children="",
+                                style=code_style,
+                            ),
+                        ],
+                        style={
+                            "display": "inline-block",
+                            "vertical-align": "top",
+                            "width": "20%",
+                        },
+                    ),
+                    html.Div(
+                        [
+                            html.H2("Available moves"),
+                            html.Div(
+                                id="available-moves",
+                                children=generate_available_moves(game, move_history),
+                            ),
+                        ],
+                        style={
+                            "display": "inline-block",
+                            "vertical-align": "top",
+                            "width": "80%",
+                            "overflow-x": "scroll",
+                        },
+                    ),
+                ]
+            ),
+            dcc.Store(id="session_id", data=session_id),
+        ]
+    )
+
+
+app.layout = serve_layout
 app.title = "RGU - LUT explorer"
 
 # Exécuter l'application

@@ -19,7 +19,7 @@ WORKDIR /app
 # Install dependencies
 COPY /temp /app/temp
 COPY poetry.lock pyproject.toml ./
-RUN poetry install --no-dev
+RUN poetry install --only main
 
 
 COPY . /app
