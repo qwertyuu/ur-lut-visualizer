@@ -32,13 +32,17 @@ def get_session_game(session_id):
 
 
 def init_session(session_id):
-    game = Game.create_finkel(pawns=7)
     data_by_session[session_id] = {
-        "game": game,
+        "game": Game.create_finkel(pawns=7),
         "game_history": [],
         "move_history": [],
         "init_date": pd.Timestamp.now(),
     }
+
+
+def set_game(session_id, game):
+    data_by_session[session_id]["game"] = game
+    return game
 
 
 def get_session_game_history(session_id):
@@ -195,8 +199,7 @@ def on_button_click(n_clicks, reset_n_clicks, session_id):
     button_id = json.loads(button_id)["index"]
     if button_id == "back":
         move_history.pop()
-        game = game_history.pop()
-        data_by_session[session_id]["game"] = game
+        game = set_game(game_history.pop())
         return (
             is_back_disabled(game_history),
             get_lut_board_state(game, move_history),
