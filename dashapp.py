@@ -12,7 +12,7 @@ from royalur import Game
 from royalur.lut.board_encoder import SimpleGameStateEncoding
 from royalur.model.player import PlayerType
 import os
-import dash_core_components as dcc
+from dash import dcc
 
 
 REPO_ID = "sothatsit/RoyalUr"
