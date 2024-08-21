@@ -4,7 +4,7 @@ Welcome!
 
 Here is the code for the Ur Lut visualizer (finkel ruleset for now).
 
-If you want to run this locally, first install [poetry](https://python-poetry.org/docs/#installation)
+If you want to run this locally, first install [poetry](https://python-poetry.org/docs/#installing-with-the-official-installer)
 
 Then, to install dependencies: `poetry install`
 
