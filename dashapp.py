@@ -317,6 +317,7 @@ def serve_layout():
         [
             html.H1("Royal Game of Ur - LUT exploration"),
             html.P("Under the Finkel ruleset - More rulesets coming soon!"),
+            dcc.Markdown("This explorer is [open source](https://github.com/qwertyuu/ur-lut-visualizer)! Come help me make it better!"),
             dbc.Row(
                 [
                     dbc.Col(
