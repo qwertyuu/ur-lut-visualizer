@@ -10,6 +10,7 @@ from royalur import Game
 from royalur.lut.board_encoder import SimpleGameStateEncoding
 from royalur.model.player import PlayerType
 import os
+import dash_bootstrap_components as dbc
 
 
 REPO_ID = "sothatsit/RoyalUr"
@@ -55,7 +56,11 @@ def get_session_move_history(session_id):
 
 
 # Créer l'application Dash
-app = dash.Dash(__name__, suppress_callback_exceptions=True)
+app = dash.Dash(
+    __name__,
+    suppress_callback_exceptions=True,
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+)
 
 encoding = SimpleGameStateEncoding()
 
@@ -308,14 +313,13 @@ def generate_available_moves(game):
 def serve_layout():
     session_id = str(random.randint(0, 1000000))
     game = get_session_game(session_id)
-    return html.Div(
-        children=[
-            # html.Img(src="data:image/png;base64," + string.decode("utf-8")),
+    return dbc.Container(
+        [
             html.H1("Royal Game of Ur - LUT exploration"),
             html.P("Under the Finkel ruleset - More rulesets coming soon!"),
-            html.Div(
+            dbc.Row(
                 [
-                    html.Div(
+                    dbc.Col(
                         [
                             html.H2("Current board"),
                             html.Button(
@@ -336,12 +340,11 @@ def serve_layout():
                             ),
                         ],
                         style={
-                            "display": "inline-block",
                             "vertical-align": "top",
-                            "width": "20%",
                         },
+                        md=3,
                     ),
-                    html.Div(
+                    dbc.Col(
                         [
                             html.H2("Available moves"),
                             html.Div(
@@ -350,16 +353,16 @@ def serve_layout():
                             ),
                         ],
                         style={
-                            "display": "inline-block",
                             "vertical-align": "top",
-                            "width": "80%",
                             "overflow-x": "scroll",
                         },
+                        md=9,
                     ),
                 ]
             ),
             dcc.Store(id="session_id", data=session_id),
         ],
+        fluid=True,
     )
 
 
