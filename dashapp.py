@@ -243,7 +243,7 @@ def on_button_click(n_clicks, reset_n_clicks, session_id):
 code_style = {
     "whiteSpace": "pre-wrap",
     "font-family": "monospace",
-    "font-size": "14px",
+    "font-size": "12px",
     "margin-right": "14px",
 }
 
