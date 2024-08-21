@@ -305,6 +305,7 @@ def serve_layout():
         [
             # html.Img(src="data:image/png;base64," + string.decode("utf-8")),
             html.H1("Royal Game of Ur - LUT exploration"),
+            html.P("Under the Finkel ruleset - More coming soon!"),
             html.Div(
                 [
                     html.Div(
