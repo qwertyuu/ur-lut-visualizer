@@ -132,17 +132,17 @@ def get_lut_board_state(game: Game, compare_to_prob=None):
     if compare_to_prob is not None:
         proba_diff = probability - compare_to_prob
         if proba_diff > 0:
-            light_string_proba += f" (+{proba_diff:.2f}%)"
+            light_string_proba += f"(+{proba_diff:.2f}%)"
         else:
-            light_string_proba += f" ({proba_diff:.2f}%)"
+            light_string_proba += f"({proba_diff:.2f}%)"
 
     dark_string_proba = f"Dark {100-probability:.2f}% "
     if compare_to_prob is not None:
         proba_diff = 100 - probability - (100 - compare_to_prob)
         if proba_diff > 0:
-            dark_string_proba += f" (+{proba_diff:.2f}%)"
+            dark_string_proba += f"(+{proba_diff:.2f}%)"
         else:
-            dark_string_proba += f" ({proba_diff:.2f}%)"
+            dark_string_proba += f"({proba_diff:.2f}%)"
     if current_state.is_finished():
         return f"{string}\nWin prob: {light_string_proba}, {dark_string_proba}\n{player_after_text}: {current_state.get_winner().text_name} wins\n"
     return f"{string}\nWin prob: {light_string_proba}, {dark_string_proba}\n{player_after_text}: {current_state.get_turn().text_name}\n"
