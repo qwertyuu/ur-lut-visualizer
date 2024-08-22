@@ -6,7 +6,7 @@ from dash import html, ALL, dcc
 from royalur import LutAgent
 from huggingface_hub import hf_hub_download
 import pandas as pd
-from royalur import Game
+from royalur import Game, Piece, PlayerState
 from royalur.lut.board_encoder import SimpleGameStateEncoding
 from royalur.model.player import PlayerType
 import os
@@ -72,6 +72,17 @@ def to_nicer_ascii(game: Game):
     |*|_|_|_|_ _|*|_|
     |_|_|_|*|_|_|_|_|
     |*|_|_|_|   |*|_|
+
+    in ram:
+    ix->
+    * . * iy
+    . . .  |
+    . . .  v
+    . * .
+      .
+      .
+    * . *
+    . . .
     """
     """
     Writes the contents of this board into a String, where
@@ -180,7 +191,6 @@ def generate_move_text(i, move_history):
     return f"#{i + 1} {move_history[i]}\n"
 
 
-# define callback for "Move" button
 @app.callback(
     Output({"type": "move", "index": "back"}, "disabled"),
     Output("board", "children"),
@@ -188,13 +198,47 @@ def generate_move_text(i, move_history):
     Input({"type": "move", "index": ALL}, "n_clicks"),
     Input("reset", "n_clicks"),
     Input("session_id", "data"),
+    Input("store-events", "data"),
     prevent_initial_call=True,
 )
-def on_button_click(n_clicks, reset_n_clicks, session_id):
+def on_button_click(n_clicks, reset_n_clicks, session_id, store_data):
     game = get_session_game(session_id)
     move_history = get_session_move_history(session_id)
     game_history = get_session_game_history(session_id)
     ctx = dash.callback_context
+    if "store-events.data" == ctx.triggered[0]["prop_id"]:
+        print(store_data)
+        move_history.clear()
+        game_history.clear()
+        new_game = Game.create_finkel(pawns=7)
+        board = new_game.get_board()
+        for light_pawn_pos in store_data["L"]["board_positions"]:
+            board.set_by_indices(
+                light_pawn_pos[0],
+                light_pawn_pos[1],
+                Piece(PlayerType.LIGHT, light_pawn_pos[2]),
+            )
+        for dark_pawn_pos in store_data["D"]["board_positions"]:
+            board.set_by_indices(
+                dark_pawn_pos[0],
+                dark_pawn_pos[1],
+                Piece(PlayerType.DARK, dark_pawn_pos[2]),
+            )
+
+        lp = new_game.get_current_state().light_player
+        new_game.get_current_state()._light_player = PlayerState(
+            lp.player, store_data["L"]["left"], store_data["L"]["score"]
+        )
+        dp = new_game.get_current_state().dark_player
+        new_game.get_current_state()._dark_player = PlayerState(
+            dp.player, store_data["D"]["left"], store_data["D"]["score"]
+        )
+        game = set_game(session_id, new_game)
+        return (
+            is_back_disabled(game_history),
+            get_lut_board_state(game),
+            generate_available_moves(game),
+        )
     if ctx.triggered[0]["prop_id"] == "reset.n_clicks":
         init_session(session_id)
         game = get_session_game(session_id)
@@ -310,6 +354,18 @@ def generate_available_moves(game):
     return new_components
 
 
+# Callback to toggle modal visibility
+@app.callback(
+    dash.Output("input-modal", "is_open"),
+    [dash.Input("open-modal", "n_clicks"), dash.Input("close-modal", "n_clicks")],
+    [dash.State("input-modal", "is_open")],
+)
+def toggle_modal(open_clicks, close_clicks, is_open):
+    if open_clicks or close_clicks:
+        return not is_open
+    return is_open
+
+
 def serve_layout():
     session_id = str(random.randint(0, 1000000))
     game = get_session_game(session_id)
@@ -317,7 +373,35 @@ def serve_layout():
         [
             html.H1("Royal Game of Ur - LUT exploration"),
             html.P("Under the Finkel ruleset - More rulesets coming soon!"),
-            dcc.Markdown("This explorer is [open source](https://github.com/qwertyuu/ur-lut-visualizer)! Come help me make it better!"),
+            dcc.Markdown(
+                "This explorer is [open source](https://github.com/qwertyuu/ur-lut-visualizer)! Come help me make it better!"
+            ),
+            dbc.Modal(
+                [
+                    dbc.ModalHeader(dbc.ModalTitle("Modal title"), id="modal-header"),
+                    dbc.ModalBody(
+                        [
+                            html.Div(id="picker"),
+                            html.Button("Save", id="submit"),
+                        ],
+                        id="modal-body",
+                    ),
+                    dbc.ModalFooter(
+                        [
+                            dbc.Button("Close", id="close-modal", className="ml-2"),
+                            dbc.Button(
+                                "Save changes",
+                                id="save-changes",
+                                className="ml-2",
+                                color="primary",
+                            ),
+                        ]
+                    ),
+                ],
+                id="input-modal",
+                is_open=False,
+                size="lg",
+            ),
             dbc.Row(
                 [
                     dbc.Col(
@@ -328,6 +412,7 @@ def serve_layout():
                                 id="reset",
                                 n_clicks=0,
                             ),
+                            dbc.Button("Enter state", id="open-modal", n_clicks=0),
                             html.P(
                                 id="board",
                                 children=get_lut_board_state(game),
@@ -362,6 +447,7 @@ def serve_layout():
                 ]
             ),
             dcc.Store(id="session_id", data=session_id),
+            dcc.Store(id="store-events", data={}),
         ],
         fluid=True,
     )
