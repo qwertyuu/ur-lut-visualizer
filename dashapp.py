@@ -128,35 +128,51 @@ def to_nicer_ascii(game: Game):
 
 def get_lut_board_state(game: Game, compare_to_prob=None):
     nicer_ascii = to_nicer_ascii(game)
-    string = nicer_ascii + "\n"
-    light_player = game.get_light_player()
-    dark_player = game.get_dark_player()
-    string += f"\nRemaining pawn & score: Light ({light_player.piece_count} / {light_player.score}), Dark ({dark_player.piece_count} / {dark_player.score})"
+    parts = []
     current_state = game.get_current_state()
     value = lut_get(current_state)
     probability = value / 65535 * 100
-    player_after_text = "Current player"
-    if compare_to_prob is not None:
-        player_after_text = "Player after move"
 
-    light_string_proba = f"Light {probability:.2f}% "
+    light_string_proba = f"○ {probability:.2f}%"
     if compare_to_prob is not None:
         proba_diff = probability - compare_to_prob
         if proba_diff > 0:
-            light_string_proba += f"(+{proba_diff:.2f}%)"
+            light_string_proba += f" (+{proba_diff:.2f}%)"
         else:
-            light_string_proba += f"({proba_diff:.2f}%)"
+            light_string_proba += f" ({proba_diff:.2f}%)"
 
-    dark_string_proba = f"Dark {100-probability:.2f}% "
+    dark_string_proba = f"● {100-probability:.2f}%"
     if compare_to_prob is not None:
         proba_diff = 100 - probability - (100 - compare_to_prob)
         if proba_diff > 0:
-            dark_string_proba += f"(+{proba_diff:.2f}%)"
+            dark_string_proba += f" (+{proba_diff:.2f}%)"
         else:
-            dark_string_proba += f"({proba_diff:.2f}%)"
+            dark_string_proba += f" ({proba_diff:.2f}%)"
+
+    def nice_to_ascii(nice: str):
+        return "●" if nice == "Dark" else "○"
+
+    after_board_parts = []
     if current_state.is_finished():
-        return f"{string}\nWin prob: {light_string_proba}, {dark_string_proba}\n{player_after_text}: {current_state.get_winner().text_name} wins\n"
-    return f"{string}\nWin prob: {light_string_proba}, {dark_string_proba}\n{player_after_text}: {current_state.get_turn().text_name}\n"
+        parts.append(f"\nWin prob: {light_string_proba}, {dark_string_proba}")
+        after_board_parts.append(
+            f"\n{nice_to_ascii(current_state.get_winner().text_name)} wins"
+        )
+    else:
+        parts.append(f"\nWin prob: {light_string_proba}, {dark_string_proba}")
+        after_board_parts.append(
+            f"\n{nice_to_ascii(current_state.get_turn().text_name)}'s turn"
+        )
+
+    parts.append(nicer_ascii)
+    parts.extend(after_board_parts)
+    light_player = game.get_light_player()
+    dark_player = game.get_dark_player()
+    parts.append(
+        f"○: {light_player.piece_count} pieces, {light_player.score} score\n●: {dark_player.piece_count} pieces, {dark_player.score} score"
+    )
+
+    return "\n".join(parts)
 
 
 def lut_get(current_state):
@@ -207,7 +223,6 @@ def on_button_click(n_clicks, reset_n_clicks, session_id, store_data):
     game_history = get_session_game_history(session_id)
     ctx = dash.callback_context
     if "store-events.data" == ctx.triggered[0]["prop_id"]:
-        print(store_data)
         move_history.clear()
         game_history.clear()
         new_game = Game.create_finkel(pawns=7)
@@ -232,6 +247,9 @@ def on_button_click(n_clicks, reset_n_clicks, session_id, store_data):
         dp = new_game.get_current_state().dark_player
         new_game.get_current_state()._dark_player = PlayerState(
             dp.player, store_data["D"]["left"], store_data["D"]["score"]
+        )
+        new_game.get_current_state()._turn = (
+            PlayerType.DARK if store_data["current_player"] == "D" else PlayerType.LIGHT
         )
         game = set_game(session_id, new_game)
         return (
@@ -303,10 +321,12 @@ def generate_available_moves(game):
             dice_components.append(
                 html.Div(
                     [
-                        html.Button(
+                        dbc.Button(
                             "Switch player",
                             id={"type": "move", "index": f"{dice}"},
                             n_clicks=0,
+                            size="sm",
+                            color="secondary",
                         ),
                         html.P(
                             get_lut_board_state(
@@ -328,10 +348,12 @@ def generate_available_moves(game):
                 dice_components.append(
                     html.Div(
                         [
-                            html.Button(
+                            dbc.Button(
                                 move.describe(),
                                 id={"type": "move", "index": f"{dice}-{i}"},
                                 n_clicks=0,
+                                color="secondary",
+                                size="sm",
                             ),
                             html.P(
                                 get_lut_board_state(game_move_copy, game_proba),
@@ -356,14 +378,57 @@ def generate_available_moves(game):
 
 # Callback to toggle modal visibility
 @app.callback(
-    dash.Output("input-modal", "is_open"),
-    [dash.Input("open-modal", "n_clicks"), dash.Input("close-modal", "n_clicks")],
-    [dash.State("input-modal", "is_open")],
+    [Output("input-modal", "is_open"), Output("store-events-out", "children")],
+    [Input("open-modal", "n_clicks"), Input("save-changes", "n_clicks")],
+    [dash.State("input-modal", "is_open"), dash.State("session_id", "data")],
 )
-def toggle_modal(open_clicks, close_clicks, is_open):
+def toggle_modal(open_clicks, close_clicks, is_open, session_id):
+    game = get_session_game(session_id)
+    store_data = {
+        "L": {
+            "board_positions": [],
+            "left": 0,
+            "score": 0,
+        },
+        "D": {
+            "board_positions": [],
+            "left": 0,
+            "score": 0,
+        },
+        "current_player": "L",
+    }
+    board = game.get_board()
+
+    for ix in range(board._width):
+        for iy in range(board._height):
+            if board._shape.contains_indices(ix, iy):
+                piece = board.get_by_indices(ix, iy)
+                if piece:
+                    store_data[piece.owner.character]["board_positions"].append(
+                        [ix, iy]
+                    )
+    current_state = game.get_current_state()
+    lp = current_state.light_player
+    store_data["L"]["left"] = lp.piece_count
+    store_data["L"]["score"] = lp.score
+    dp = current_state.dark_player
+    store_data["D"]["left"] = dp.piece_count
+    store_data["D"]["score"] = dp.score
+
+    if current_state.is_finished():
+        if current_state.get_winner() == PlayerType.DARK:
+            store_data["current_player"] = "D"
+        else:
+            store_data["current_player"] = "L"
+    else:
+        if current_state.get_turn() == PlayerType.DARK:
+            store_data["current_player"] = "D"
+        else:
+            store_data["current_player"] = "L"
+
     if open_clicks or close_clicks:
-        return not is_open
-    return is_open
+        return not is_open, json.dumps(store_data)
+    return is_open, json.dumps(store_data)
 
 
 def serve_layout():
@@ -378,22 +443,23 @@ def serve_layout():
             ),
             dbc.Modal(
                 [
-                    dbc.ModalHeader(dbc.ModalTitle("Modal title"), id="modal-header"),
+                    dbc.ModalHeader(
+                        dbc.ModalTitle("Enter your game state using the picker"),
+                        id="modal-header",
+                    ),
                     dbc.ModalBody(
                         [
                             html.Div(id="picker"),
-                            html.Button("Save", id="submit"),
+                            html.Div(id="store-events-out", style={"display": "none"}),
                         ],
                         id="modal-body",
                     ),
                     dbc.ModalFooter(
                         [
-                            dbc.Button("Close", id="close-modal", className="ml-2"),
                             dbc.Button(
-                                "Save changes",
+                                "Close",
                                 id="save-changes",
-                                className="ml-2",
-                                color="primary",
+                                color="secondary",
                             ),
                         ]
                     ),
@@ -407,22 +473,33 @@ def serve_layout():
                     dbc.Col(
                         [
                             html.H2("Current board"),
-                            html.Button(
-                                "Reset",
-                                id="reset",
-                                n_clicks=0,
+                            dbc.ButtonGroup(
+                                [
+                                    dbc.Button(
+                                        "State editor",
+                                        id="open-modal",
+                                        n_clicks=0,
+                                        color="primary",
+                                    ),
+                                    dbc.Button(
+                                        "New game",
+                                        id="reset",
+                                        n_clicks=0,
+                                        color="secondary",
+                                    ),
+                                    dbc.Button(
+                                        "Undo last move",
+                                        id={"type": "move", "index": "back"},
+                                        n_clicks=0,
+                                        disabled=True,
+                                        color="secondary",
+                                    ),
+                                ]
                             ),
-                            dbc.Button("Enter state", id="open-modal", n_clicks=0),
                             html.P(
                                 id="board",
                                 children=get_lut_board_state(game),
                                 style=code_style,
-                            ),
-                            html.Button(
-                                "Undo move",
-                                id={"type": "move", "index": "back"},
-                                n_clicks=0,
-                                disabled=True,
                             ),
                         ],
                         style={

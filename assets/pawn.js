@@ -44,6 +44,15 @@ class Pawn {
         }
     }
 
+    setBoardPos(board_pos) {
+        if (!this.board_positions.includes(board_pos)) {
+            throw new Error("Whoops, board pos is not in the available board positions for this player");
+        }
+        this.is_translucent = false;
+        this.board_pos_hover = board_pos;
+        this.position = this.p5.createVector(board_pos[0], board_pos[1]);
+    }
+
     draw() {
         const draw_color = this.p5.color(this.base_color);
         draw_color.setAlpha(this.is_translucent ? 127 : 255);
