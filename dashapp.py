@@ -304,7 +304,7 @@ def on_button_click(n_clicks, reset_n_clicks, session_id, store_data):
 
 code_style = {
     "whiteSpace": "pre-wrap",
-    "font-family": "monospace",
+    "font-family": "DejaVu Sans Mono",
     "font-size": "12px",
     "margin-right": "14px",
 }
@@ -333,7 +333,6 @@ def generate_available_moves(game):
                                 game_copy,
                                 game_proba,
                             ),
-                            # monospace font for preformatted text
                             style=code_style,
                         ),
                     ],
