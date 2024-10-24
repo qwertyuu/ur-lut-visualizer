@@ -375,6 +375,17 @@ def generate_available_moves(game):
     return new_components
 
 
+@app.callback(
+    [Output("tool-description-modal", "is_open")],
+    [Input("open-description-modal", "n_clicks"), Input("close", "n_clicks")],
+    [dash.State("tool-description-modal", "is_open")],
+)
+def toggle_description_modal(open_clicks, close_clicks, is_open):
+    if open_clicks or close_clicks:
+        return not is_open,
+    return is_open,
+
+
 # Callback to toggle modal visibility
 @app.callback(
     [Output("input-modal", "is_open"), Output("store-events-out", "children")],
@@ -433,12 +444,19 @@ def toggle_modal(open_clicks, close_clicks, is_open, session_id):
 def serve_layout():
     session_id = str(random.randint(0, 1000000))
     game = get_session_game(session_id)
+    # read the contents of tool-description.md
+    tool_description = ""
+    with open("tool-description.md", "r") as f:
+        tool_description = f.read()
     return dbc.Container(
         [
             html.H1("Royal Game of Ur - LUT exploration"),
-            html.P("Under the Finkel ruleset - More rulesets coming soon!"),
-            dcc.Markdown(
-                "This explorer is [open source](https://github.com/qwertyuu/ur-lut-visualizer)! Come help me make it better!"
+            dbc.Button(
+                "ℹ️ What is this tool? ℹ️",
+                n_clicks=0,
+                className="me-1",
+                id="open-description-modal",
+                color="dark"
             ),
             dbc.Modal(
                 [
@@ -464,6 +482,31 @@ def serve_layout():
                     ),
                 ],
                 id="input-modal",
+                is_open=False,
+                size="lg",
+            ),
+            dbc.Modal(
+                [
+                    dbc.ModalHeader(
+                        dbc.ModalTitle("Royal Game of Ur - LUT explorer tool description"),
+                    ),
+                    dbc.ModalBody(
+                        [
+                            html.Div(
+                                dcc.Markdown(tool_description),
+                                style={"overflow-y": "scroll", "max-height": "600px"},
+                            ),
+                        ],
+                    ),
+                    dbc.ModalFooter(
+                        [
+                            dbc.Button(
+                                "Close", id="close", className="ms-auto", n_clicks=0
+                            ),
+                        ]
+                    ),
+                ],
+                id="tool-description-modal",
                 is_open=False,
                 size="lg",
             ),
