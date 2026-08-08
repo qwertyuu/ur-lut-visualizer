@@ -246,10 +246,20 @@ def best_move_api():
         board = game.get_board()
         for entry in payload.get("pieces", []):
             owner = PlayerType.LIGHT if entry["owner"] == "L" else PlayerType.DARK
+            ix, iy = int(entry["ix"]), int(entry["iy"])
+            # The live site and royalur-python number their paths differently.
+            # A tile is the stable shared representation, so derive the canonical
+            # path index here rather than trusting the client's transient index.
+            path = game.rules._paths.get(owner)
+            path_index = next(
+                index
+                for index, tile in enumerate(path)
+                if tile.ix == ix and tile.iy == iy
+            )
             board.set_by_indices(
-                int(entry["ix"]),
-                int(entry["iy"]),
-                Piece(owner, int(entry["path_index"])),
+                ix,
+                iy,
+                Piece(owner, path_index),
             )
 
         state = game.get_current_state()
