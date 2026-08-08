@@ -11,6 +11,7 @@ from royalur.lut.board_encoder import SimpleGameStateEncoding
 from royalur.model.player import PlayerType
 import os
 import dash_bootstrap_components as dbc
+from flask import jsonify, request
 
 
 REPO_ID = "sothatsit/RoyalUr"
@@ -61,6 +62,24 @@ app = dash.Dash(
     suppress_callback_exceptions=True,
     external_stylesheets=[dbc.themes.BOOTSTRAP],
 )
+
+
+@app.server.after_request
+def allow_royalur_lookup(response):
+    if request.path == "/api/v1/best-move" and request.headers.get("Origin") in {
+        "https://royalur.net",
+        "https://www.royalur.net",
+    }:
+        response.headers["Access-Control-Allow-Origin"] = request.headers["Origin"]
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
+@app.server.route("/api/v1/best-move", methods=["OPTIONS"])
+def best_move_preflight():
+    return "", 204
 
 encoding = SimpleGameStateEncoding()
 
@@ -197,6 +216,76 @@ def lut_get(current_state):
     if inverted:
         value = 65535 - value
     return value
+
+
+def tile_payload(tile):
+    if tile is None:
+        return None
+    return {"ix": tile.ix, "iy": tile.iy}
+
+
+@app.server.post("/api/v1/best-move")
+def best_move_api():
+    """Return the LUT-optimal move for one Finkel position.
+
+    The route is deliberately stateless so the browser integration does not
+    share or mutate an explorer session.
+    """
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify(error="Expected a JSON object"), 400
+
+    try:
+        players = payload["players"]
+        turn = payload["turn"]
+        roll = int(payload["roll"])
+        if turn not in ("L", "D") or roll not in range(5):
+            raise ValueError("turn must be L or D and roll must be 0 through 4")
+
+        game = Game.create_finkel(pawns=7)
+        board = game.get_board()
+        for entry in payload.get("pieces", []):
+            owner = PlayerType.LIGHT if entry["owner"] == "L" else PlayerType.DARK
+            board.set_by_indices(
+                int(entry["ix"]),
+                int(entry["iy"]),
+                Piece(owner, int(entry["path_index"])),
+            )
+
+        state = game.get_current_state()
+        light = players["L"]
+        dark = players["D"]
+        state._light_player = PlayerState(
+            state.light_player.player, int(light["left"]), int(light["score"])
+        )
+        state._dark_player = PlayerState(
+            state.dark_player.player, int(dark["left"]), int(dark["score"])
+        )
+        state._turn = PlayerType.LIGHT if turn == "L" else PlayerType.DARK
+
+        game.roll_dice(roll)
+        moves = game.find_available_moves()
+        if not moves:
+            return jsonify(move=None, reason="no_legal_move")
+
+        scored = []
+        for move in moves:
+            next_game = game.copy()
+            next_game.make_move(move)
+            scored.append((lut_get(next_game.get_current_state()), move))
+        value, move = (max(scored, key=lambda item: item[0]) if turn == "L"
+                       else min(scored, key=lambda item: item[0]))
+
+        return jsonify(
+            move={
+                "source": tile_payload(move.get_source()) if move.has_source() else None,
+                "destination": tile_payload(move.get_dest()) if move.has_dest() else None,
+                "description": move.describe(),
+                "light_win_probability": value / 65535,
+            }
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        return jsonify(error=str(error)), 400
 
 
 def is_back_disabled(game_history):
